@@ -1,0 +1,13 @@
+{application, notifier,
+ [
+  {description, "notifier: notify all the people about all the things."},
+  {vsn, "0.3"},
+  {modules, []},
+  {registered, [notifier_sup]},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {mod, {notifier_app, []}},
+  {env, []}
+ ]}.

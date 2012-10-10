@@ -62,14 +62,14 @@ event(Notifier, Timestamp, What) ->
   % - log event as type with detauls
   % - check keys interested in this event
   % - notify keys interested in this event the event exists
-  case watcher_count(Notifier) of
-    0 -> ok;  % if no watchers, just pass through.
-    _ -> EventId = integer_to_list(incr(event_counter), 36),
-         hmset(event, EventId, [ts, Timestamp,
-                                what, term_to_binary(What, [compressed])]),
-         Watchers = watchers_on_notifier(Notifier),
-         % this should be in an async queue system (?):
-         notify(Watchers, EventId, Timestamp)
+  Watchers = watchers_on_notifier(Notifier),
+  case Watchers of
+    [] -> ok;  % if no watchers, just pass through.
+     _ -> EventId = integer_to_list(incr(event_counter), 36),
+          hmset(event, EventId, [ts, Timestamp,
+                                 what, term_to_binary(What, [compressed])]),
+          % this should be in an async queue system (?):
+          notify(Watchers, EventId, Timestamp)
   end.
 
 %%%--------------------------------------------------------------------

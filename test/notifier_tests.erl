@@ -33,7 +33,7 @@ reply_signup() ->
   notifier:user_watch("comment.reply.BOB", bob).
 
 reply() ->
-  notifier:event("comment.reply.BOB", 6, {reply, clo, 16}).
+  notifier:event("comment.reply.BOB", {reply, clo, 16}, 6).
 
 read_reply_event() ->
   Events = notifier:events_for_user(bob),
@@ -55,7 +55,7 @@ message_and_check() ->
   % trigger the event on reply-generic, but it should bubble up to
   % bob's subscription of comment-catcher because comment-catcher
   % is subscribed to comment.reply-generic.  got it?
-  notifier:event("comment.reply-generic", 12, {reply, hier}),
+  notifier:event("comment.reply-generic", {reply, hier}, 12),
   Events = notifier:events_for_user(bob),
   [EventId] = Events,
   Contents = notifier:event(EventId),

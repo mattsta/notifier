@@ -6,7 +6,7 @@
 
 -export([events_for_user/1, events_for_watcher/1]).
 
--export([event/3]).
+-export([event/2, event/3]).
 -export([event/1]).
 -export([remove_event_from_user/2]).
 
@@ -56,7 +56,10 @@ watching(Watcher) ->
 %%%--------------------------------------------------------------------
 %%% Event Happening
 %%%--------------------------------------------------------------------
-event(Notifier, Timestamp, What) ->
+event(Notifier, What) ->
+  event(Notifier, What, epoch()).
+
+event(Notifier, What, Timestamp) ->
   % when getting new event:
   % - generate new event ID
   % - log event as type with detauls
@@ -193,3 +196,8 @@ zrem(Key, What) ->
 
 zmembers(Key) ->
   er:zrevrange(redis_notifier, nkey(Key, events), 0, -1).
+
+-compile({inline, epoch/0}).
+epoch() ->
+  {Mega, Sec, _} = now(),
+  Mega * 1000000 + Sec.

@@ -65,18 +65,38 @@ event(Notifier, What, Timestamp) ->
   % - log event as type with detauls
   % - check keys interested in this event
   % - notify keys interested in this event the event exists
+  NotifierId = case notifier_exists(Notifier) of
+                 nil -> create_notifier(Notifier);
+                   N -> N
+               end,
+
   Watchers = watchers_on_notifier(Notifier),
   case Watchers of
     [] -> ok;  % if no watchers, just pass through.
      _ -> EventId = integer_to_list(incr(event_counter), 36),
           hmset(event, EventId, [ts, Timestamp,
                                  % the notification key for this event:
-                                 by, Notifier,
+                                 by, NotifierId,
                                  % the event body.  short for memory save.
                                  e, term_to_binary(What, [compressed])]),
           % this should be in an async queue system (?):
           notify(Watchers, EventId, Timestamp)
   end.
+
+create_notifier(Notifier) ->
+  % create unique notifier ID
+  % store notifiersNOTIFIER -> Notifier Id
+  % store notifier-ids:ID -> NOTIFIER
+  NotifierId = integer_to_list(incr(notifier_counter), 36),
+  hmset(notifiers, Notifier, NotifierId),
+  hmset(notifier_ids, NotifierId, Notifier),
+  NotifierId.
+
+notifier_exists(Notifier) ->
+  hget(notifiers, Notifier).
+
+notifier_id_to_notifier(NotifierId) ->
+  hget(notifier_ids, NotifierId).
 
 %%%--------------------------------------------------------------------
 %%% Event Clearing From User
@@ -90,7 +110,9 @@ remove_event_from_user(EventId, Uid) ->
 event(EventId) ->
   E = hgetall(event, EventId),
   Thing = get_value(e, E),
-  lists:keyreplace(e, 1, E, {e, binary_to_term(Thing)}).
+  NotifierId = get_value(by, E),
+  PreReturn = lists:keyreplace(e, 1, E, {e, binary_to_term(Thing)}),
+  lists:keyreplace(by, 1, PreReturn, {by, notifier_id_to_notifier(NotifierId)}).
 
 %%%--------------------------------------------------------------------
 %%% Watcher Updating
@@ -150,7 +172,7 @@ unwatch(Notifier, Watcher) ->
 -compile({inline, [{nkey, 1}, {nkey, 2},
                    {ukey, 1}, {wkey, 1},
                    {sadd, 2}, {srem, 2}, {smembers, 1}, {scard, 1},
-                   {hmset, 3}, {hgetall, 2},
+                   {hmset, 3}, {hget, 2}, {hgetall, 2},
                    {incr, 1},
                    {zadd, 3}, {zrem, 2}, {zmembers, 1}]}).
 
@@ -183,6 +205,9 @@ scard(Key) ->
 
 hmset(Namespace, Key, Whats) ->
   er:hmset(redis_notifier, nkey(Namespace, Key), Whats).
+
+hget(Namespace, Key) ->
+  er:hget(redis_notifier, nkey(Namespace, Key)).
 
 hgetall(Namespace, Key) ->
   er:hgetall_p(redis_notifier, nkey(Namespace, Key)).

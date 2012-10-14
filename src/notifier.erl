@@ -25,10 +25,22 @@ start() ->
 %%% Notification Reading
 %%%--------------------------------------------------------------------
 watchers_on_notifier(Notifier) ->
-  smembers(Notifier).
+  case notifier_exists(Notifier) of
+    nil -> [];
+      N -> watchers_on_notifier_id(N)
+  end.
+
+watchers_on_notifier_id(NotifierId) ->
+  smembers(NotifierId).
 
 watcher_count(Notifier) ->
-  scard(Notifier).
+  case notifier_exists(Notifier) of
+    nil -> 0;
+      N -> watcher_count_on_notifier_id(N)
+  end.
+
+watcher_count_on_notifier_id(NotifierId) ->
+  scard(NotifierId).
 
 %%%--------------------------------------------------------------------
 %%% Watcher Reading
@@ -51,7 +63,8 @@ watcher_watching(WatcherId) ->
   watching(wkey(WatcherId)).
 
 watching(Watcher) ->
-  smembers(Watcher).
+  NotifierIds = smembers(Watcher),
+  [notifier_id_to_notifier(N) || N <- NotifierIds].
 
 %%%--------------------------------------------------------------------
 %%% Event Happening
@@ -60,17 +73,18 @@ event(Notifier, What) ->
   event(Notifier, What, epoch()).
 
 event(Notifier, What, Timestamp) ->
+  case notifier_exists(Notifier) of
+    nil -> pass;
+      N -> handle_event(N, What, Timestamp)
+  end.
+
+handle_event(NotifierId, What, Timestamp) ->
   % when getting new event:
   % - generate new event ID
   % - log event as type with detauls
   % - check keys interested in this event
   % - notify keys interested in this event the event exists
-  NotifierId = case notifier_exists(Notifier) of
-                 nil -> create_notifier(Notifier);
-                   N -> N
-               end,
-
-  Watchers = watchers_on_notifier(Notifier),
+  Watchers = watchers_on_notifier_id(NotifierId),
   case Watchers of
     [] -> ok;  % if no watchers, just pass through.
      _ -> EventId = integer_to_list(incr(event_counter), 36),
@@ -88,10 +102,11 @@ create_notifier(Notifier) ->
   % store notifiersNOTIFIER -> Notifier Id
   % store notifier-ids:ID -> NOTIFIER
   NotifierId = integer_to_list(incr(notifier_counter), 36),
-  hmset(notifiers, Notifier, NotifierId),
-  hmset(notifier_ids, NotifierId, Notifier),
+  hset(notifiers, Notifier, NotifierId),
+  hset(notifier_ids, NotifierId, Notifier),
   NotifierId.
 
+% returns notifier id
 notifier_exists(Notifier) ->
   hget(notifiers, Notifier).
 
@@ -148,8 +163,12 @@ watcher_watch(Notifier, WatcherId) ->
 
 watch(Notifier, Watcher) ->
   % add to Notifier and add to set of things this user/watcher is watching
-  sadd(Watcher, Notifier),
-  sadd(Notifier, Watcher).
+  NotifierId = case notifier_exists(Notifier) of
+                 nil -> create_notifier(Notifier);
+                   N -> N
+               end,
+  sadd(Watcher, NotifierId),
+  sadd(NotifierId, Watcher).
 
 %%%--------------------------------------------------------------------
 %%% Watcher Removal
@@ -163,17 +182,20 @@ watcher_unwatch(Notifier, WatcherId) ->
   unwatch(Notifier, wkey(WatcherId)).
 
 unwatch(Notifier, Watcher) ->
-  srem(Watcher, Notifier),
-  srem(Notifier, Watcher).
+  case notifier_exists(Notifier) of
+    nil -> pass;
+      N -> srem(Watcher, N),
+           srem(N, Watcher)
+  end.
 
 %%%--------------------------------------------------------------------
 %%% Key Doers
 %%%--------------------------------------------------------------------
 -compile({inline, [{nkey, 1}, {nkey, 2},
                    {ukey, 1}, {wkey, 1},
-                   {sadd, 2}, {srem, 2}, {smembers, 1}, {scard, 1},
-                   {hmset, 3}, {hget, 2}, {hgetall, 2},
-                   {incr, 1},
+                   {sadd, 2}, {srem, 2}, {smembers, 1},
+                   {hmset, 3}, {hset, 3}, {hget, 2}, {hgetall, 2},
+                   {incr, 1}, {scard, 1},
                    {zadd, 3}, {zrem, 2}, {zmembers, 1}]}).
 
 nkey(What) ->
@@ -203,11 +225,14 @@ smembers(Key) ->
 scard(Key) ->
   er:scard(redis_notifier, nkey(Key)).
 
+hset(Namespace, Key, Whats) ->
+  er:hset(redis_notifier, nkey(Namespace), Key, Whats).
+
 hmset(Namespace, Key, Whats) ->
   er:hmset(redis_notifier, nkey(Namespace, Key), Whats).
 
-hget(Namespace, Key) ->
-  er:hget(redis_notifier, nkey(Namespace, Key)).
+hget(Namespace, SubKey) ->
+  er:hget(redis_notifier, nkey(Namespace), SubKey).
 
 hgetall(Namespace, Key) ->
   er:hgetall_p(redis_notifier, nkey(Namespace, Key)).

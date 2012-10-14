@@ -42,7 +42,9 @@ read_reply_event() ->
   notifier:remove_event_from_user(EventId, bob),
   ZeroEvents = notifier:events_for_user(bob),
   ?assertEqual(<<"1">>, EventId),
-  ?assertEqual([{ts, <<"6">>}, {what, {reply, clo, 16}}], Contents),
+  ?assertEqual([{by, <<"comment.reply.BOB">>},
+                {e, {reply, clo, 16}},
+                {ts, <<"6">>}], lists:keysort(1, Contents)),
   ?assertEqual([], ZeroEvents).
 
 messaging_signup() ->
@@ -60,7 +62,9 @@ message_and_check() ->
   [EventId] = Events,
   Contents = notifier:event(EventId),
   ?assertEqual(<<"2">>, EventId),
-  ?assertEqual([{ts, <<"12">>}, {what, {reply, hier}}], Contents).
+  ?assertEqual([{by, <<"comment.reply-generic">>},
+                {e, {reply, hier}},
+                {ts, <<"12">>}], lists:keysort(1, Contents)).
 
 %%%----------------------------------------------------------------------
 %%% Set it up, tear it down

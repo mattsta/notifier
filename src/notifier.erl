@@ -70,7 +70,10 @@ event(Notifier, What, Timestamp) ->
     [] -> ok;  % if no watchers, just pass through.
      _ -> EventId = integer_to_list(incr(event_counter), 36),
           hmset(event, EventId, [ts, Timestamp,
-                                 what, term_to_binary(What, [compressed])]),
+                                 % the notification key for this event:
+                                 by, Notifier,
+                                 % the event body.  short for memory save.
+                                 e, term_to_binary(What, [compressed])]),
           % this should be in an async queue system (?):
           notify(Watchers, EventId, Timestamp)
   end.
@@ -86,8 +89,8 @@ remove_event_from_user(EventId, Uid) ->
 %%%--------------------------------------------------------------------
 event(EventId) ->
   E = hgetall(event, EventId),
-  Thing = get_value(what, E),
-  lists:keyreplace(what, 1, E, {what, binary_to_term(Thing)}).
+  Thing = get_value(e, E),
+  lists:keyreplace(e, 1, E, {e, binary_to_term(Thing)}).
 
 %%%--------------------------------------------------------------------
 %%% Watcher Updating

@@ -5,6 +5,7 @@
 -export([user_watching/1, watcher_watching/1]).
 
 -export([events_for_user/1, events_for_watcher/1]).
+-export([events_for_user/2, events_for_watcher/2]).
 
 -export([event/2, event/3]).
 -export([event/1]).
@@ -48,11 +49,20 @@ watcher_count_on_notifier_id(NotifierId) ->
 events_for_user(Uid) ->
   events_for(ukey(Uid)).
 
+events_for_user(Uid, Count) ->
+  events_for(ukey(Uid), Count).
+
 events_for_watcher(WatcherId) ->
   events_for(wkey(WatcherId)).
 
+events_for_watcher(WatcherId, Count) ->
+  events_for(wkey(WatcherId), Count).
+
 events_for(WatcherId) ->
   zmembers(WatcherId).
+
+events_for(WatcherId, Count) ->
+  zmembers(WatcherId, Count).
 
 % all events this user is watching
 user_watching(Uid) ->
@@ -196,7 +206,7 @@ unwatch(Notifier, Watcher) ->
                    {sadd, 2}, {srem, 2}, {smembers, 1},
                    {hmset, 3}, {hset, 3}, {hget, 2}, {hgetall, 2},
                    {incr, 1}, {scard, 1},
-                   {zadd, 3}, {zrem, 2}, {zmembers, 1}]}).
+                   {zadd, 3}, {zrem, 2}, {zmembers, 1}, {zmembers, 2}]}).
 
 nkey(What) ->
   eru:er_key(notify, What).
@@ -248,7 +258,10 @@ zrem(Key, What) ->
   er:zrem(redis_notifier, nkey(Key, events), What).
 
 zmembers(Key) ->
-  er:zrevrange(redis_notifier, nkey(Key, events), 0, -1).
+  zmembers(Key, 0).  % return all members
+
+zmembers(Key, Count) ->
+  er:zrevrange(redis_notifier, nkey(Key, events), 0, Count - 1).
 
 -compile({inline, epoch/0}).
 epoch() ->
